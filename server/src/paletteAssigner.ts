@@ -46,6 +46,8 @@ export interface LaunchLook {
   picked?: number;
   /** The Directory launched into: its default characters. */
   directory?: Directory;
+  /** An additional palette to leave available for another identity. */
+  reservePalette?: number;
 }
 
 /**
@@ -60,12 +62,14 @@ export function assignPaletteIfNeeded(
   launch: LaunchLook = {},
 ): void {
   if (agent.palette !== undefined) return;
+  const reserved = directoryDefaults();
+  if (launch.reservePalette !== undefined) reserved.add(launch.reservePalette);
   const look = chooseLook({
     paletteCount: getPaletteCount(),
     worn: [...store.values()].filter((existing) => existing.id !== agent.id),
     picked: launch.picked,
     directory: launch.directory,
-    reserved: directoryDefaults(),
+    reserved,
   });
   agent.palette = look.palette;
   agent.repeat = look.repeat;

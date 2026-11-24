@@ -11,6 +11,7 @@ import type {
   ReloadAssetsSideEffect,
   SetHooksEnabledSideEffect,
 } from './clientMessageHandler.js';
+import type { CodexOffice } from './codexWatcher.js';
 import {
   SERVER_JSON_DIR,
   SERVER_JSON_NAME,
@@ -73,6 +74,7 @@ export class PixelAgentsServer {
     onSetHooksEnabled?: SetHooksEnabledSideEffect;
     onReloadAssets?: ReloadAssetsSideEffect;
     ptyManager?: TerminalSessions;
+    codexOffice?: CodexOffice;
     /** Package root holding dist/hooks/ (standalone; see HttpServerOptions). */
     packageRoot?: string;
     /** Extra privileged Host names (standalone; see wsAuth.privilegedHostnames). */
@@ -145,6 +147,7 @@ export class PixelAgentsServer {
       onSetHooksEnabled: options?.onSetHooksEnabled,
       onReloadAssets: options?.onReloadAssets,
       ptyManager: options?.ptyManager,
+      codexOffice: options?.codexOffice,
       packageRoot: options?.packageRoot,
       allowedHosts: standalone?.allowedHosts,
     });

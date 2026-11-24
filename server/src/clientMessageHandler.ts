@@ -12,6 +12,7 @@ import {
   handleCharacterProfilesClientMessage,
   refusedSaveAnswer,
 } from './characterProfilesPersistence.js';
+import type { CodexOffice } from './codexWatcher.js';
 import {
   getHooksConsent,
   getHooksEnabled,
@@ -96,6 +97,7 @@ export interface ClientMessageContext {
   /** PTY terminals for standalone-launched agents. Absent in VS Code embedded
    *  mode, where the editor owns terminal lifecycle. */
   ptyManager?: TerminalSessions;
+  codexOffice?: CodexOffice;
 }
 
 // ── Setting key constants (mirror adapters/vscode/constants.ts) ──
@@ -142,7 +144,7 @@ function shownHostDirectoriesFor(ctx: ClientMessageContext): HostDirectoryEntry[
 function directoriesMessage(ctx: ClientMessageContext) {
   return {
     type: 'directoriesLoaded',
-    directories: listDirectories(shownHostDirectoriesFor(ctx)),
+    directories: ctx.codexOffice?.directories() ?? listDirectories(shownHostDirectoriesFor(ctx)),
   } as const;
 }
 
@@ -183,6 +185,10 @@ export function handleClientMessage(
       // field: the client sends only where to launch. Every launch comes from a
       // drawer row and carries its Directory's path; no directoryPath falls
       // back to the server cwd (launchStandaloneAgent's own default).
+      if (ctx.codexOffice) {
+        ctx.codexOffice.launch(ctx.ptyManager, msg.directoryPath);
+        break;
+      }
       const picked = rosterPick(msg.palette, getPaletteCount());
       const launched = launchStandaloneAgent(
         { store, runtime, ptyManager: ctx.ptyManager, provider: claudeProvider },
@@ -204,12 +210,14 @@ export function handleClientMessage(
       if (!ctx.ptyManager || !conversationProvider) break;
       send({
         type: 'conversationsLoaded',
-        directories: listConversations(
-          listDirectories(shownHostDirectoriesFor(ctx)),
-          conversationProvider,
-          liveSessions(store),
-          conversationLimitsFrom(msg.limits),
-        ),
+        directories:
+          ctx.codexOffice?.list(conversationLimitsFrom(msg.limits)) ??
+          listConversations(
+            listDirectories(shownHostDirectoriesFor(ctx)),
+            conversationProvider,
+            liveSessions(store),
+            conversationLimitsFrom(msg.limits),
+          ),
       });
       break;
     }
@@ -221,18 +229,24 @@ export function handleClientMessage(
       send({
         type: 'conversationSearchResults',
         ...query,
-        ...searchConversations(
-          listDirectories(shownHostDirectoriesFor(ctx)),
-          conversationProvider,
-          liveSessions(store),
-          query,
-        ),
+        ...(ctx.codexOffice?.search(query) ??
+          searchConversations(
+            listDirectories(shownHostDirectoriesFor(ctx)),
+            conversationProvider,
+            liveSessions(store),
+            query,
+          )),
       });
       break;
     }
 
     case 'resumeConversation': {
       if (!runtime || !ctx.ptyManager || !conversationProvider) break;
+      if (ctx.codexOffice) {
+        if (typeof msg.sessionId === 'string')
+          ctx.codexOffice.launch(ctx.ptyManager, msg.directoryPath, msg.sessionId);
+        break;
+      }
       const resume = resumeRequest(store, conversationProvider, msg);
       if (!resume) break;
       launchStandaloneAgent(
@@ -265,7 +279,7 @@ export function handleClientMessage(
         // PTY-backed agents; do it here too so external agents (and a PTY that
         // never exits) are still removed promptly.
         ctx.ptyManager?.dispose(id);
-        runtime.closeAgent(id);
+        if (!ctx.codexOffice?.owns(id)) runtime.closeAgent(id);
       }
       break;
     }
@@ -690,7 +704,11 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
 
   // 4a-ter. Usage bars: the operator's account usage, privileged clients only.
   if (ctx.privileged) {
-    for (const message of usageSnapshotMessages()) send({ ...message });
+    if (ctx.codexOffice) {
+      send({ type: 'usageLimits', providerId: 'codex', ...ctx.codexOffice.usage() });
+    } else {
+      for (const message of usageSnapshotMessages()) send({ ...message });
+    }
   }
 
   // 4b. Directory→Area mappings (must arrive before existingAgents so the

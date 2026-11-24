@@ -94,6 +94,16 @@ pixel-agents --help
 
 The printed URL carries a `?token=`. Without it you can watch the office in a sort of read-only mode: no agents can be launched, terminals are not shown, and layout and settings cannot be edited. The token is kept in `~/.pixel-agents/standalone-token`, so a bookmark keeps working if you also fix `--port`. Treat the URL as a secret: whoever holds it can do all of the above.
 
+### Watch local Codex sessions
+
+From this checkout, run the standalone office after building:
+
+```bash
+node dist/cli.js --codex --no-terminal --port 4748
+```
+
+Open `http://127.0.0.1:4748`. The standalone office reads the local OpenBot roster and keeps one character per teammate, even when idle. One Cuburt character represents Codex sessions under `~/Developer/cogonlabs`, including rollouts from the two projects before they moved into this folder. Cuburt shows activity when any matching session is active. Pixel Agents reads activity from `~/.codex/sessions` (or `$CODEX_HOME/sessions`) without showing prompts or tool output. Start and resume Codex sessions in Codex itself.
+
 ### On your phone, via Tailscale
 
 1. Install [Tailscale](https://tailscale.com/download) on the computer running Pixel Agents and on your phone, both signed in to the same tailnet.

@@ -13,6 +13,7 @@ import type {
   SetHooksEnabledSideEffect,
 } from './clientMessageHandler.js';
 import { handleClientMessage } from './clientMessageHandler.js';
+import type { CodexOffice } from './codexWatcher.js';
 import {
   HOOK_API_PREFIX,
   MAX_HOOK_BODY_SIZE,
@@ -65,6 +66,7 @@ export interface HttpServerOptions {
   /** PTY terminals for standalone-launched agents. Absent = terminal feature off
    *  (VS Code embedded mode, where the editor owns terminals). */
   ptyManager?: TerminalSessions;
+  codexOffice?: CodexOffice;
   /** The package root holding dist/hooks/ (standalone), from which the Usage
    *  Bars toggle installs the status line bridge script. */
   packageRoot?: string;
@@ -295,6 +297,7 @@ function registerWebSocketRoute(
           packageRoot: options.packageRoot,
           privileged,
           ptyManager: options.ptyManager,
+          codexOffice: options.codexOffice,
         });
       } catch {
         // Malformed JSON, ignore

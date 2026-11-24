@@ -11,6 +11,7 @@ import { PixelIcon } from './ui/PixelIcon.js';
 export interface AgentAppearance {
   palette: number;
   repeat: number;
+  name?: string;
 }
 
 /** Agent activity reflected by the tab's status dot. */
@@ -65,13 +66,16 @@ export function AgentCard({
     <div
       className={`group relative pointer-events-auto flex items-stretch gap-1 p-1 cursor-pointer border-2 shrink-0 ${CARD_VARIANT[variant]}`}
       onClick={() => onSelect(agentId)}
-      title={`Agent ${agentId}`}
+      title={appearance.name ?? `Agent ${agentId}`}
     >
       <CharacterMugShot
         palette={appearance.palette}
         repeat={appearance.repeat}
         cropTop={CARD_MUGSHOT_CROP_TOP_ROW}
       />
+      {appearance.name && (
+        <span className="self-center truncate max-w-28 text-xs">{appearance.name}</span>
+      )}
       {/* Close on top, status dot at the bottom, both centred over the
           same column beside the mug shot. */}
       <div className="flex flex-col items-center justify-between shrink-0">

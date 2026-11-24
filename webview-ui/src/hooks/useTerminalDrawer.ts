@@ -175,7 +175,14 @@ export function useTerminalDrawer({
   const getAppearance = useCallback(
     (id: number): AgentAppearance => {
       const ch = getOfficeState().characters.get(id);
-      return ch ? { palette: ch.palette, repeat: ch.repeat } : DEFAULT_APPEARANCE;
+      if (!ch) return DEFAULT_APPEARANCE;
+      const label = ch.directoryName;
+      const name = label?.startsWith('OpenBot · ')
+        ? label.slice('OpenBot · '.length)
+        : label?.startsWith('Cuburt · ')
+          ? 'Cuburt'
+          : undefined;
+      return { palette: ch.palette, repeat: ch.repeat, name };
     },
     [getOfficeState],
   );

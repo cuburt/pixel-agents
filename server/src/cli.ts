@@ -20,6 +20,7 @@ import {
 } from './assetReload.js';
 import { getCharacterProfiles, watchCharacterProfiles } from './characterProfilesPersistence.js';
 import type { AssetCache, ReloadAssetsSideEffect } from './clientMessageHandler.js';
+import { watchCodexSessions } from './codexWatcher.js';
 import {
   getHooksConsent,
   getHooksEnabled,
@@ -34,6 +35,7 @@ import {
   WILDCARD_HOSTNAMES,
 } from './constants.js';
 import { FileStateAdapter } from './fileStateAdapter.js';
+import { watchOpenBotRoster } from './openbotRoster.js';
 import {
   claudeProvider,
   copyHookScript,
@@ -62,6 +64,7 @@ export interface CliArgs {
   /** False when --no-terminal was passed: the office only watches agents; the
    *  browser can neither launch them nor attach to their terminals. */
   terminal: boolean;
+  codex?: boolean;
   /** --allowed-host names (repeatable): extra Host names, beyond loopback and a
    *  specific --host, that a tokened browser session is privileged under --
    *  typically a reverse proxy's public name. See wsAuth.privilegedHostnames. */
@@ -123,6 +126,8 @@ export function parseArgs(argv: string[]): CliArgs {
       args.rotateToken = true;
     } else if (argv[i] === '--no-terminal') {
       args.terminal = false;
+    } else if (argv[i] === '--codex') {
+      args.codex = true;
     } else if (argv[i] === '--pty-host') {
       args.ptyHost = true;
     } else if (argv[i] === '--pty-host-socket') {
@@ -144,6 +149,7 @@ Options:
                         old one (bookmarks, other devices) stops working
   --no-terminal         Disable the embedded terminal (watch agents only; no
                         launching or attaching from the browser)
+  --codex               Watch local Codex CLI and Desktop sessions
   --pty-host            Development only: run agents' terminals in a separate
                         process that outlives the server, so restarting it
                         (e.g. to update it) leaves agents running
@@ -313,6 +319,12 @@ async function main(): Promise<void> {
   const server = new PixelAgentsServer();
 
   // Terminals for agents this server launches.
+  if (args.codex && (args.host !== '127.0.0.1' || args.ptyHost) && args.terminal) {
+    console.error(
+      '[Pixel Agents] Codex terminal requires the default loopback host and in-process terminals.',
+    );
+    process.exit(1);
+  }
   const ptyManager = await openTerminalSessions(args, distRoot).catch((err: unknown) => {
     console.error(`[Pixel Agents] --pty-host: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
@@ -414,6 +426,7 @@ async function main(): Promise<void> {
       console.log('[Pixel Agents] Assets reloaded (external directory change)');
     };
 
+    const codexOffice = args.codex ? watchCodexSessions(store) : undefined;
     const config = await server.start({
       store,
       runtime,
@@ -425,11 +438,17 @@ async function main(): Promise<void> {
       onSetHooksEnabled,
       onReloadAssets,
       ptyManager,
+      codexOffice,
       packageRoot,
       allowedHosts: args.allowedHosts,
       rotateToken: args.rotateToken,
     });
     currentConfig = { port: config.port, token: config.token };
+    if (args.codex && config.pid !== process.pid) {
+      throw new Error(
+        'Stop the existing standalone Pixel Agents server before starting with --codex.',
+      );
+    }
     if (args.rotateToken) {
       console.log(
         '[Pixel Agents] Server token rotated: URLs carrying the old token no longer grant access. Open the new URL below on each device.',
@@ -486,6 +505,7 @@ async function main(): Promise<void> {
 
     // Start scanning for external sessions (Claude running in user's terminal)
     const cwd = process.cwd();
+    const stopOpenBot = args.codex ? watchOpenBotRoster(store) : undefined;
     const dirs = claudeProvider.getSessionDirs?.(cwd);
     if (dirs && dirs[0]) {
       const projectDir = dirs[0];
@@ -513,6 +533,8 @@ async function main(): Promise<void> {
     async function shutdown(): Promise<void> {
       if (shuttingDown) return;
       shuttingDown = true;
+      codexOffice?.stop();
+      stopOpenBot?.();
       console.log('\nShutting down...');
       // In process: kill child terminals and wait for them (each exit closes
       // its agent): exiting now would cancel the SIGKILL escalation and leave
